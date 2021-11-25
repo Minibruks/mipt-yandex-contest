@@ -21,7 +21,7 @@ public:
 
     [[nodiscard]] virtual std::vector<VertexT> GetNeighbors(const VertexT& current_vertex) const = 0;
 
-    virtual void AddEdge(VertexT& vertex_from, VertexT& vertex_to) = 0;
+    virtual void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) = 0;
 };
 
 class GraphList final : public IGraph {
@@ -42,10 +42,7 @@ public:
         return adjacency_list_.at(v);
     }
 
-    void AddEdge(VertexT& vertex_from, VertexT& vertex_to) override {
-        vertex_from--;
-        vertex_to--;
-
+    void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) override {
         adjacency_list_[vertex_from].push_back(vertex_to);
         if (!oriented_) {
             adjacency_list_[vertex_to].push_back(vertex_from);
@@ -76,12 +73,10 @@ public:
         return answer;
     }
 
-    void AddEdge(VertexT& vertex_from, VertexT& vertex_to) override {
+    void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) override {
         if (vertex_from == vertex_to) {
             return;
         }
-        vertex_from--;
-        vertex_to--;
         matrix_[vertex_from][vertex_to] = 1;
         if (!oriented_) {
             matrix_[vertex_to][vertex_from] = 1;
@@ -147,10 +142,7 @@ void PrintShortestPath(const std::vector<VertexT>& path_list) {
     }
 }
 
-std::vector<VertexT> ShortestPath(const IGraph& graph, VertexT start, VertexT finish) {
-    start--;
-    finish--;
-
+std::vector<VertexT> ShortestPath(const IGraph& graph, const VertexT start, const VertexT finish) {
     Path path(graph.GetVertexNum());
 
     BuildShortestPath(graph, start, path);
@@ -173,10 +165,10 @@ int main() {
         VertexT vertex_from = 0;
         VertexT vertex_to = 0;
         std::cin >> vertex_from >> vertex_to;
-        graph.AddEdge(vertex_from, vertex_to);
+        graph.AddEdge(vertex_from - 1, vertex_to - 1);
     }
 
-    auto shortest_path = ShortestPath(graph, start, finish);
+    auto shortest_path = ShortestPath(graph, start - 1, finish - 1);
     PrintShortestPath(shortest_path);
 
     return 0;
