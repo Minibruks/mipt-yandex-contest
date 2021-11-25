@@ -4,95 +4,144 @@
 #include <vector>
 #include <list>
 
-class Graph {
+using VertexT = int32_t;
+using ColorT = int32_t;
+
+enum { ORIENTED = true, NOT_ORIENTED = false };
+
+enum { WHITE = 1, BLACK = 2, NO_COLOR = 0 };
+
+enum { BIPIRITATE = true, NOT_BIPIRITATE = false };
+
+inline int InvertColor(ColorT color) {
+    return color == WHITE ? BLACK : WHITE;
+}
+
+class IGraph {
 protected:
-    uint64_t vertex_degree = 0;
+    VertexT vertex_num_ = 0;
+    bool oriented_;
 
 public:
-    [[nodiscard]] uint64_t getVertexDegree() const {
-        return vertex_degree;
+    [[nodiscard]] VertexT GetVertexNum() const {
+        return vertex_num_;
     }
 
-    [[nodiscard]] virtual std::vector<uint64_t> getNeighbors(const uint64_t& v) const = 0;
+    [[nodiscard]] virtual std::vector<VertexT> GetNeighbors(const VertexT& current_vertex) const = 0;
 
-    virtual void addEdge(const uint64_t& source, const uint64_t& dest) = 0;
+    virtual void AddEdge(VertexT& vertex_from, VertexT& vertex_to) = 0;
 };
 
-class GraphList final : public Graph {
+class GraphList final : public IGraph {
 private:
-    std::unordered_map<uint64_t, std::vector<uint64_t>> adjacency_list;
+    std::vector<std::vector<VertexT>> adjacency_list_;
+
 public:
-    explicit GraphList(const uint64_t& vertex_number) {
-        vertex_degree = vertex_number;
-        for (uint64_t i = 0; i < vertex_number; i++) {
-            adjacency_list[i] = std::vector<uint64_t>();
+    explicit GraphList(const VertexT& vertex_number, bool oriented_status) {
+        vertex_num_ = vertex_number;
+        adjacency_list_.resize(vertex_number);
+        for (VertexT i = 0; i < vertex_number; i++) {
+            adjacency_list_[i] = std::vector<VertexT>();
         }
+        oriented_ = oriented_status;
     }
 
-    [[nodiscard]] std::vector<uint64_t> getNeighbors(const uint64_t& v) const override {
-        return adjacency_list.at(v);
+    [[nodiscard]] std::vector<VertexT> GetNeighbors(const VertexT& v) const override {
+        return adjacency_list_.at(v);
     }
 
-    void addEdge(const uint64_t& source, const uint64_t& dest) override {
-        adjacency_list[source].push_back(dest);
-        adjacency_list[dest].push_back(source);
+    void AddEdge(VertexT& vertex_from, VertexT& vertex_to) override {
+        vertex_from--;
+        vertex_to--;
+
+        adjacency_list_[vertex_from].push_back(vertex_to);
+        if (!oriented_) {
+            adjacency_list_[vertex_to].push_back(vertex_from);
+        }
     }
 };
 
-inline int invertColor(int color) {
-    return color == 1 ? 2 : 1;
-}
+class GraphMatrix final : public IGraph {
+private:
+    std::vector<std::vector<VertexT>> matrix_;
 
-void dfs(const Graph& graph, const uint64_t& current_vertex, const int current_color, std::vector<uint64_t>& colors, bool& flag) {
-    colors[current_vertex] = current_color;
-    std::vector<uint64_t> neighbors = graph.getNeighbors(current_vertex);
-
-    for (auto& neighbor: neighbors) {
-        if (colors[neighbor] == 0) {
-            dfs(graph, neighbor, invertColor(current_color), colors, flag);
-        } else if (colors[neighbor] == current_color) {
-            // return false;
-            flag = false;
+public:
+    explicit GraphMatrix(const VertexT& quantity) {
+        for (VertexT i = 0; i < quantity; ++i) {
+            std::vector<VertexT> tmp(quantity, 0);
+            matrix_.push_back(tmp);
         }
+        vertex_num_ = quantity;
     }
 
-    // return true;
+    [[nodiscard]] std::vector<VertexT> GetNeighbors(const VertexT& current_vertex) const override {
+        std::vector<VertexT> answer;
+        for (VertexT i = 0; i < GetVertexNum(); ++i) {
+            if (matrix_[current_vertex][i] != 0) {
+                answer.push_back(i);
+            }
+        }
+        return answer;
+    }
+
+    void AddEdge(VertexT& vertex_from, VertexT& vertex_to) override {
+        vertex_from--;
+        vertex_to--;
+
+        if (vertex_from == vertex_to) {
+            return;
+        }
+        matrix_[vertex_from][vertex_to] = 1;
+        if (!oriented_) {
+            matrix_[vertex_to][vertex_from] = 1;
+        }
+    }
+};
+
+void DFS(const IGraph& graph, const VertexT& current_vertex, const int current_color, std::vector<ColorT>& colors,
+         bool& vertex_is_same_color) {
+    colors[current_vertex] = current_color;
+    std::vector<VertexT> neighbors = graph.GetNeighbors(current_vertex);
+
+    for (auto& neighbor : neighbors) {
+        if (colors[neighbor] == NO_COLOR) {
+            DFS(graph, neighbor, InvertColor(current_color), colors, vertex_is_same_color);
+        } else if (colors[neighbor] == current_color) {
+            vertex_is_same_color = false;
+        }
+    }
 }
 
-bool checkIfBipartite(const Graph& graph, const uint64_t& vertex_number) {
-    std::vector<uint64_t> colors(graph.getVertexDegree(), 0);
-    bool flag = true;
+bool CheckIfBipartite(const IGraph& graph) {
+    std::vector<ColorT> colors(graph.GetVertexNum(), NO_COLOR);
+    bool vertex_is_same_color = true;
 
-    for (int i = 0; i < vertex_number; i++) {
-        if (colors[i] == 0) {
-            dfs(graph, i, 1, colors, flag);
-            if (!flag) {
-                return false;
+    for (int i = 0; i < graph.GetVertexNum(); i++) {
+        if (colors[i] == NO_COLOR) {
+            DFS(graph, i, WHITE, colors, vertex_is_same_color);
+            if (!vertex_is_same_color) {
+                return NOT_BIPIRITATE;
             }
         }
     }
-    return true;
+    return BIPIRITATE;
 }
 
 int main() {
-    uint64_t vertex = 0, edge = 0;
-    std::cin >> vertex >> edge;
+    VertexT vertex_num = 0;
+    VertexT edge_num = 0;
+    std::cin >> vertex_num >> edge_num;
 
-    if (vertex == 1) {
-        std::cout << "NO\n";
-        return 0;
+    GraphList graph(vertex_num, NOT_ORIENTED);
+
+    for (VertexT i = 0; i < edge_num; ++i) {
+        VertexT vertex_from = 0;
+        VertexT vertex_to = 0;
+        std::cin >> vertex_from >> vertex_to;
+        graph.AddEdge(vertex_from, vertex_to);
     }
 
-    GraphList graph(vertex);
-
-    for (uint64_t i = 0; i < edge; ++i) {
-        uint64_t a = 0, b = 0;
-        std::cin >> a >> b;
-        graph.addEdge(a - 1, b - 1);
-    }
-
-    bool answer = checkIfBipartite(graph, vertex);
-    // printShortestDistance(answer);
+    bool answer = CheckIfBipartite(graph);
     if (answer) {
         std::cout << "YES\n";
     } else {
