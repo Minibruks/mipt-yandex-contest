@@ -2,126 +2,217 @@
 #include <algorithm>
 #include <unordered_map>
 #include <vector>
+#include <queue>
 
-enum {
-    ORIENTED = true,
-    NOT_ORIENTED = false
-};
+// const int64_t kUndefinedDist = 1000 * 1000 * 1000 * 1LL;
+using VertexT = int32_t;
+using SizeT = uint64_t;
 
-class Graph {
+enum { ORIENTED = true, NOT_ORIENTED = false };
+
+enum { TRANSPOSED = true, NOT_TRANSPOSED = false };
+
+class IGraph {
 protected:
-    uint64_t vertex_degree = 0;
-    bool oriented;
+    VertexT vertex_num_ = 0;
+    bool oriented_;
+    bool transposed_;
 
 public:
-    [[nodiscard]] uint64_t getVertexDegree() const {
-        return vertex_degree;
+    [[nodiscard]] VertexT GetVertexNum() const {
+        return vertex_num_;
     }
 
-    [[nodiscard]] virtual std::vector<uint64_t> getNeighbors(const uint64_t& v) const = 0;
+    [[nodiscard]] virtual std::vector<VertexT> GetNeighbors(const VertexT& current_vertex) const = 0;
 
-    virtual void addEdge(const uint64_t& source, const uint64_t& dest) = 0;
+    virtual void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) = 0;
+
+    virtual bool IsTransposed() const = 0;
 };
 
-class GraphList final : public Graph {
+class GraphList final : public IGraph {
 private:
-    std::unordered_map<uint64_t, std::vector<uint64_t>> adjacency_list;
+    std::vector<std::vector<VertexT>> adjacency_list_;
+
 public:
-    explicit GraphList(const uint64_t& vertex_number, bool oriented_status) {
-        vertex_degree = vertex_number;
-        for (uint64_t i = 0; i < vertex_number; i++) {
-            adjacency_list[i] = std::vector<uint64_t>();
+    explicit GraphList(const VertexT& vertex_number, bool oriented_status, bool transposed_status) {
+        vertex_num_ = vertex_number;
+        adjacency_list_.resize(vertex_number);
+        for (VertexT i = 0; i < vertex_number; i++) {
+            adjacency_list_[i] = std::vector<VertexT>();
         }
-        oriented = oriented_status;
+        oriented_ = oriented_status;
+        transposed_ = transposed_status;
     }
 
-    [[nodiscard]] std::vector<uint64_t> getNeighbors(const uint64_t& v) const override {
-        return adjacency_list.at(v);
+    [[nodiscard]] std::vector<VertexT> GetNeighbors(const VertexT& v) const override {
+        return adjacency_list_.at(v);
     }
 
-    void addEdge(const uint64_t& source, const uint64_t& dest) override {
-        adjacency_list[source].push_back(dest);
-        if (!oriented) {
-            adjacency_list[dest].push_back(source);
+    void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) override {
+        adjacency_list_[vertex_from].push_back(vertex_to);
+        if (!oriented_) {
+            adjacency_list_[vertex_to].push_back(vertex_from);
         }
+    }
+
+    bool IsTransposed() const override {
+        return transposed_;
+    }
+
+    GraphList TransposeGraph() {
+        GraphList transpose_graph((*this).GetVertexNum(), ORIENTED, TRANSPOSED);
+        for (VertexT vert = 0; vert < (*this).GetVertexNum(); vert++) {
+            auto neighbors = (*this).GetNeighbors(vert);
+            for (auto& neighbor : neighbors) {
+                transpose_graph.AddEdge(neighbor, vert);
+            }
+        }
+        return transpose_graph;
     }
 };
 
-void dfsGraph(const Graph& graph, uint64_t current_vertex, std::vector<bool>& used, std::vector<uint64_t>& order) {
-    used[current_vertex] = true;
+class GraphMatrix final : public IGraph {
+private:
+    std::vector<std::vector<VertexT>> matrix_;
 
-    std::vector<uint64_t> neighbors = graph.getNeighbors(current_vertex);
-    for (auto& neighbor: neighbors) {
-        if (!used[neighbor]) {
-            dfsGraph(graph, neighbor, used, order);
+public:
+    explicit GraphMatrix(const VertexT& quantity, bool oriented_status, bool transposed_status) {
+        for (VertexT i = 0; i < quantity; ++i) {
+            std::vector<VertexT> tmp(quantity, 0);
+            matrix_.push_back(tmp);
         }
-    }
-    order.push_back(current_vertex);
-}
-
-void dfsTransposeGraph(const Graph& graph, uint64_t current_vertex, std::vector<bool>& used, std::vector<uint64_t>& comp) {
-    used[current_vertex] = true;
-    comp.push_back(current_vertex);
-
-    std::vector<uint64_t> neighbors = graph.getNeighbors(current_vertex);
-    for (auto& neighbor: neighbors) {
-        if (!used[neighbor]) {
-            dfsTransposeGraph(graph, neighbor, used, comp);
-        }
-    }
-}
-
-void findStrongConnectivity(const Graph& graph, const Graph& graph_transpose) {
-    std::vector<bool> used(graph.getVertexDegree(), false);
-    std::vector<uint64_t> comp;
-    std::vector<uint64_t> order;
-    std::vector<uint64_t> answer(graph.getVertexDegree());
-    int num = 1;
-
-    for (auto i = 0; i < graph.getVertexDegree(); i++) {
-        if (!used[i]) {
-            dfsGraph(graph, i, used, order);
-        }
+        vertex_num_ = quantity;
+        oriented_ = oriented_status;
+        transposed_ = transposed_status;
     }
 
-    used.assign(graph.getVertexDegree(), false);
-
-    for (auto i = 0; i < graph.getVertexDegree(); i++) {
-        uint64_t current_vertex = order[graph.getVertexDegree() - i - 1];
-        if (!used[current_vertex]) {
-            dfsTransposeGraph(graph_transpose, current_vertex, used, comp);
-            for (auto& j: comp) {
-                answer[j] = num;
+    [[nodiscard]] std::vector<VertexT> GetNeighbors(const VertexT& current_vertex) const override {
+        std::vector<VertexT> answer;
+        for (VertexT i = 0; i < GetVertexNum(); ++i) {
+            if (matrix_[current_vertex][i] != 0) {
+                answer.push_back(i);
             }
-            num++;
-            comp.clear();
+        }
+        return answer;
+    }
+
+    void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) override {
+        if (vertex_from == vertex_to) {
+            return;
+        }
+        matrix_[vertex_from][vertex_to] = 1;
+        if (!oriented_) {
+            matrix_[vertex_to][vertex_from] = 1;
         }
     }
 
-    std::cout << num - 1 << "\n";
-    for (int i = 0; i < graph.getVertexDegree(); i++) {
-        std::cout << answer[i] << " ";
+    bool IsTransposed() const override {
+        return transposed_;
     }
+
+    GraphMatrix TransposeGraph() {
+        GraphMatrix transpose_graph((*this).GetVertexNum(), ORIENTED, TRANSPOSED);
+        for (VertexT vert = 0; vert < (*this).GetVertexNum(); vert++) {
+            auto neighbors = (*this).GetNeighbors(vert);
+            for (auto& neighbor : neighbors) {
+                transpose_graph.AddEdge(neighbor, vert);
+            }
+        }
+        return transpose_graph;
+    }
+};
+
+struct StrongConnectivity {
+    std::vector<bool> used;
+    std::vector<VertexT> current_comp;
+    std::vector<VertexT> order;
+
+    explicit StrongConnectivity(VertexT size) {
+        used.resize(size, false);
+    }
+
+    void operator()(VertexT size) {
+        used.assign(size, false);
+    }
+};
+
+void DFStoFindStrongConnect(const IGraph& graph, VertexT current_vertex, StrongConnectivity& component) {
+    component.used[current_vertex] = true;
+    if (graph.IsTransposed()) {
+        component.current_comp.push_back(current_vertex);
+    }
+
+    std::vector<VertexT> neighbors = graph.GetNeighbors(current_vertex);
+    for (auto& neighbor : neighbors) {
+        if (!component.used[neighbor]) {
+            DFStoFindStrongConnect(graph, neighbor, component);
+        }
+    }
+    if (!graph.IsTransposed()) {
+        component.order.push_back(current_vertex);
+    }
+}
+
+void PrintStrongConnectivity(std::vector<VertexT>& strong_comp_array) {
+    int num_of_comp_in_answer = *std::max_element(strong_comp_array.begin(), strong_comp_array.end());
+    std::cout << num_of_comp_in_answer << "\n";
+    for (SizeT i = 0; i < strong_comp_array.size(); i++) {
+        std::cout << strong_comp_array[i] << " ";
+    }
+}
+
+std::vector<VertexT> FindStrongConnectivity(GraphList& graph) {
+    GraphList transpose_graph = graph.TransposeGraph();
+
+    StrongConnectivity component(graph.GetVertexNum());
+    std::vector<VertexT> answer(graph.GetVertexNum());
+    int num_of_comp_in_answer = 1;
+
+    for (auto i = 0; i < graph.GetVertexNum(); i++) {
+        if (!component.used[i]) {
+            DFStoFindStrongConnect(graph, i, component);
+        }
+    }
+
+    component(graph.GetVertexNum());
+
+    std::reverse(component.order.begin(), component.order.end());
+
+    for (auto vertex = 0; vertex < graph.GetVertexNum(); vertex++) {
+        VertexT current_vertex = component.order[vertex];
+        if (!component.used[current_vertex]) {
+            DFStoFindStrongConnect(transpose_graph, current_vertex, component);
+            for (auto& comp_elem : component.current_comp) {
+                answer[comp_elem] = num_of_comp_in_answer;
+            }
+            num_of_comp_in_answer++;
+            component.current_comp.clear();
+        }
+    }
+
+    return answer;
 }
 
 int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(nullptr);
 
-    uint64_t vertex = 0, edges = 0;
-    std::cin >> vertex >> edges;
+    VertexT vertex_num = 0;
+    VertexT edge_num = 0;
+    std::cin >> vertex_num >> edge_num;
 
-    GraphList graph(vertex, ORIENTED);
-    GraphList graph_transpose(vertex, ORIENTED);
+    GraphList graph(vertex_num, ORIENTED, NOT_TRANSPOSED);
 
-    for (uint64_t i = 0; i < edges; i++) {
-        uint64_t a = 0, b = 0;
-        std::cin >> a >> b;
-        graph.addEdge(a - 1, b - 1);
-        graph_transpose.addEdge(b - 1, a - 1);
+    for (VertexT i = 0; i < edge_num; ++i) {
+        VertexT vertex_from = 0;
+        VertexT vertex_to = 0;
+        std::cin >> vertex_from >> vertex_to;
+        graph.AddEdge(vertex_from - 1, vertex_to - 1);
     }
 
-    findStrongConnectivity(graph, graph_transpose);
+    std::vector<VertexT> answer = FindStrongConnectivity(graph);
+    PrintStrongConnectivity(answer);
 
     return 0;
 }
