@@ -4,6 +4,7 @@
 #include <vector>
 #include <list>
 
+// const int64_t kUndefinedDist = 1000 * 1000 * 1000 * 1LL;
 using VertexT = int32_t;
 using ColorT = int32_t;
 
@@ -29,7 +30,7 @@ public:
 
     [[nodiscard]] virtual std::vector<VertexT> GetNeighbors(const VertexT& current_vertex) const = 0;
 
-    virtual void AddEdge(VertexT& vertex_from, VertexT& vertex_to) = 0;
+    virtual void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) = 0;
 };
 
 class GraphList final : public IGraph {
@@ -50,10 +51,7 @@ public:
         return adjacency_list_.at(v);
     }
 
-    void AddEdge(VertexT& vertex_from, VertexT& vertex_to) override {
-        vertex_from--;
-        vertex_to--;
-
+    void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) override {
         adjacency_list_[vertex_from].push_back(vertex_to);
         if (!oriented_) {
             adjacency_list_[vertex_to].push_back(vertex_from);
@@ -84,10 +82,7 @@ public:
         return answer;
     }
 
-    void AddEdge(VertexT& vertex_from, VertexT& vertex_to) override {
-        vertex_from--;
-        vertex_to--;
-
+    void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) override {
         if (vertex_from == vertex_to) {
             return;
         }
@@ -138,7 +133,7 @@ int main() {
         VertexT vertex_from = 0;
         VertexT vertex_to = 0;
         std::cin >> vertex_from >> vertex_to;
-        graph.AddEdge(vertex_from, vertex_to);
+        graph.AddEdge(vertex_from - 1, vertex_to - 1);
     }
 
     bool answer = CheckIfBipartite(graph);
