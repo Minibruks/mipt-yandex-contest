@@ -2,119 +2,172 @@
 #include <algorithm>
 #include <unordered_map>
 #include <vector>
-#include <list>
+#include <queue>
 #include <set>
 
-enum {
-    ORIENTED = true,
-    NOT_ORIENTED = false
-};
+using VertexT = int32_t;
+using SizeT = int32_t;
 
-class Graph {
+enum { ORIENTED = true, NOT_ORIENTED = false };
+
+class IGraph {
 protected:
-    uint64_t vertex_degree = 0;
-    bool oriented;
+    VertexT vertex_num_ = 0;
+    bool oriented_;
 
 public:
-    [[nodiscard]] uint64_t getVertexDegree() const {
-        return vertex_degree;
+    [[nodiscard]] VertexT GetVertexNum() const {
+        return vertex_num_;
     }
 
-    [[nodiscard]] virtual std::vector<uint64_t> getNeighbors(const uint64_t& v) const = 0;
+    [[nodiscard]] virtual std::vector<VertexT> GetNeighbors(const VertexT& current_vertex) const = 0;
 
-    virtual void addEdge(const uint64_t& source, const uint64_t& dest) = 0;
+    virtual void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) = 0;
 };
 
-class GraphList final : public Graph {
+class GraphList final : public IGraph {
 private:
-    std::unordered_map<uint64_t, std::vector<uint64_t>> adjacency_list;
+    std::vector<std::vector<VertexT>> adjacency_list_;
+
 public:
-    explicit GraphList(const uint64_t& vertex_number, bool oriented_status) {
-        vertex_degree = vertex_number;
-        for (uint64_t i = 0; i < vertex_number; i++) {
-            adjacency_list[i] = std::vector<uint64_t>();
+    explicit GraphList(const VertexT& vertex_number, bool oriented_status) {
+        vertex_num_ = vertex_number;
+        adjacency_list_.resize(vertex_number);
+        for (VertexT i = 0; i < vertex_number; i++) {
+            adjacency_list_[i] = std::vector<VertexT>();
         }
-        oriented = oriented_status;
+        oriented_ = oriented_status;
     }
 
-    [[nodiscard]] std::vector<uint64_t> getNeighbors(const uint64_t& v) const override {
-        return adjacency_list.at(v);
+    [[nodiscard]] std::vector<VertexT> GetNeighbors(const VertexT& v) const override {
+        return adjacency_list_.at(v);
     }
 
-    void addEdge(const uint64_t& source, const uint64_t& dest) override {
-        adjacency_list[source].push_back(dest);
-        if (!oriented) {
-            adjacency_list[dest].push_back(source);
+    void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) override {
+        adjacency_list_[vertex_from].push_back(vertex_to);
+        if (!oriented_) {
+            adjacency_list_[vertex_to].push_back(vertex_from);
         }
     }
 };
 
-void dfs(const Graph& graph, uint64_t current_vertex, std::vector<bool>& used, std::vector<uint64_t>& time_up, std::vector<uint64_t>& time_in, std::set<uint64_t>& art_points, int& time, uint64_t root = -1) {
-    used[current_vertex] = true;
-    time_in[current_vertex] = time;
-    time_up[current_vertex] = time;
-    time++;
+class GraphMatrix final : public IGraph {
+private:
+    std::vector<std::vector<VertexT>> matrix_;
+
+public:
+    explicit GraphMatrix(const VertexT& quantity) {
+        for (VertexT i = 0; i < quantity; ++i) {
+            std::vector<VertexT> tmp(quantity, 0);
+            matrix_.push_back(tmp);
+        }
+        vertex_num_ = quantity;
+    }
+
+    [[nodiscard]] std::vector<VertexT> GetNeighbors(const VertexT& current_vertex) const override {
+        std::vector<VertexT> answer;
+        for (VertexT i = 0; i < GetVertexNum(); ++i) {
+            if (matrix_[current_vertex][i] != 0) {
+                answer.push_back(i);
+            }
+        }
+        return answer;
+    }
+
+    void AddEdge(const VertexT& vertex_from, const VertexT& vertex_to) override {
+        if (vertex_from == vertex_to) {
+            return;
+        }
+        matrix_[vertex_from][vertex_to] = 1;
+        if (!oriented_) {
+            matrix_[vertex_to][vertex_from] = 1;
+        }
+    }
+};
+
+struct ArtPointsStruct {
+    std::vector<bool> used;
+    std::vector<VertexT> time_up;
+    std::vector<VertexT> time_in;
+    std::set<VertexT> art_points;
+    int time;
+
+    explicit ArtPointsStruct(SizeT size) {
+        used.resize(size, false);
+        time_up.resize(size + 1);
+        time_in.resize(size + 1);
+        time = 1;
+    }
+};
+
+void DFSforArtPoints(const IGraph& graph, VertexT current_vertex, ArtPointsStruct& art_point, VertexT root = -1) {
+    art_point.used[current_vertex] = true;
+    art_point.time_in[current_vertex] = art_point.time;
+    art_point.time_up[current_vertex] = art_point.time;
+    art_point.time++;
     int children = 0;
 
-    std::vector<uint64_t> neighbors = graph.getNeighbors(current_vertex);
+    std::vector<VertexT> neighbors = graph.GetNeighbors(current_vertex);
     for (auto& neighbor: neighbors) {
         if (neighbor == root) {
             continue;
         }
-        if (used[neighbor]) {
-            time_up[current_vertex] = std::min(time_up[current_vertex], time_in[neighbor]);
+        if (art_point.used[neighbor]) {
+            art_point.time_up[current_vertex] = std::min(art_point.time_up[current_vertex], art_point.time_in[neighbor]);
         } else {
-            dfs(graph, neighbor, used, time_up, time_in, art_points, time, current_vertex);
-            time_up[current_vertex] = std::min(time_up[current_vertex], time_up[neighbor]);
+            DFSforArtPoints(graph, neighbor, art_point, current_vertex);
+            art_point.time_up[current_vertex] = std::min(art_point.time_up[current_vertex], art_point.time_up[neighbor]);
 
-            if (time_up[neighbor] >= time_in[current_vertex] && root != -1) {
-                art_points.insert(current_vertex);
+            if (art_point.time_up[neighbor] >= art_point.time_in[current_vertex] && root != -1) {
+                art_point.art_points.insert(current_vertex);
             }
             children++;
         }
     }
 
     if (root == -1 && children > 1) {
-        art_points.insert(current_vertex);
+        art_point.art_points.insert(current_vertex);
     }
 }
 
-void findArtPoints(const Graph& graph) {
-    std::vector<bool> used(graph.getVertexDegree(), false);
-    std::vector<uint64_t> time_up(graph.getVertexDegree() + 1);
-    std::vector<uint64_t> time_in(graph.getVertexDegree() + 1);
-    std::set<uint64_t> art_points;
-
-    int time = 1;
-
-    for (auto i = 0; i < graph.getVertexDegree(); i++) {
-        if (!used[i]) {
-            dfs(graph, i, used, time_up, time_in, art_points, time);
-        }
-    }
-
+void PrintArtPoints(std::set<VertexT>& art_points) {
     std::cout << art_points.size() << "\n";
     for (auto& point: art_points) {
         std::cout << point + 1 << "\n";
     }
 }
 
+std::set<VertexT> FindArtPoints(const IGraph& graph) {
+    ArtPointsStruct art_point(graph.GetVertexNum());
+
+    for (VertexT i = 0; i < graph.GetVertexNum(); i++) {
+        if (!art_point.used[i]) {
+            DFSforArtPoints(graph, i, art_point);
+        }
+    }
+
+    return art_point.art_points;
+}
+
 int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(nullptr);
 
-    uint64_t vertex = 0, edges = 0;
-    std::cin >> vertex >> edges;
+    VertexT vertex_num = 0;
+    VertexT edge_num = 0;
+    std::cin >> vertex_num >> edge_num;
 
-    GraphList graph(vertex, NOT_ORIENTED);
+    GraphList graph(vertex_num, NOT_ORIENTED);
 
-    for (uint64_t i = 0; i < edges; i++) {
-        uint64_t a = 0, b = 0;
-        std::cin >> a >> b;
-        graph.addEdge(a - 1, b - 1);
+    for (VertexT i = 0; i < edge_num; ++i) {
+        VertexT vertex_from = 0;
+        VertexT vertex_to = 0;
+        std::cin >> vertex_from >> vertex_to;
+        graph.AddEdge(vertex_from - 1, vertex_to - 1);
     }
 
-    findArtPoints(graph);
+    std::set<VertexT> answer = FindArtPoints(graph);
+    PrintArtPoints(answer);
 
     return 0;
 }
